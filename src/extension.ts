@@ -4,6 +4,7 @@
 import * as vscode from 'vscode';
 import * as net from 'net';
 import * as os from 'os';
+import * as dns from 'dns';
 
 export enum MessageType {
     ChatMessage,
@@ -44,6 +45,7 @@ export function activate(context: vscode.ExtensionContext) {
     //tcpClient = initTcpClient();
 
     registerChatCommand();
+    registerConnectCommand();
 
     // Add listner for text change event.
     vscode.workspace.onDidChangeTextDocument((textDocChanged: vscode.TextDocumentChangeEvent)=>{
@@ -71,16 +73,36 @@ export function deactivate() {
 
 function sendMessageToServer(obj){
     setTimeout(function(){
-        tcpClient = initTcpClient();
-        tcpClient.connect(6969, remoteServerIP, ()=>{
+        if(!tcpClient){
+            dns.resolve(remoteHostName, (err, addresses)=>{
+                if(addresses && addresses[0]){
+                    tcpClient = net.createConnection({port: 6969, host: addresses[0]}, ()=>{
+                        tcpClient.write(JSON.stringify(obj));
+                    });
+                    tcpClient.on('data', (data)=>{
+                    });
+                    tcpClient.on('end', ()=>{
+                        tcpClient = null;
+                    });
+                    tcpClient.on('close', ()=>{
+                        tcpClient = null;
+                    });
+                }
+            });
+        } else {
             tcpClient.write(JSON.stringify(obj));
-        });  
+        }
+        // tcpClient = initTcpClient();
+        // tcpClient.connect(6969, remoteServerIP, ()=>{
+        //     tcpClient.write(JSON.stringify(obj));
+        // });  
     }, 100); 
 }
 
 function initTcpServer(){
     var externalIp = getExternalIp();
     var server = net.createServer(function(sock) {
+        //sock.pipe(sock);
         // Add a 'data' event handler to this instance of socket
         sock.on('data', function(data) {
             onServerMessageRecieved(data);
@@ -91,15 +113,6 @@ function initTcpServer(){
         });
     }).listen(6969, externalIp);
     return server;
-}
-
-function initTcpClient(){
-    // Create tcp client.
-    var client = new net.Socket();
-    client.on('data', (data)=>{
-        // No action on response.
-    });
-    return client;      
 }
 
 function getExternalIp(): string{
@@ -143,11 +156,23 @@ function registerChatCommand(){
     });
 }
 
+function registerConnectCommand(){
+    vscode.commands.registerCommand("extension.connect", ()=> {
+            vscode.window.showInputBox().then((str : string) => {
+                var msg = "Trying to connect to " + str;
+                showMessageOnStatusBar(msg);
+                console.log(msg);
+                remoteHostName = str;
+        }); 
+    });
+}
+
 function showMessageOnStatusBar(str){
         var item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
         item.text = str;
         item.show();
 }
+
 function acquireLock(){
     lock = true;
 }
@@ -156,9 +181,7 @@ function releaseLock(){
     lock = false;
 }
 
-//var clientIP = "10.86.60.176";
-//var clientIP = "127.0.0.1";
-export var remoteServerIP = "10.86.70.152";
+export var remoteHostName = "abhinasi-dev.fareast.corp.microsoft.com";
 export var lock = false;
 export var tcpServer;
 export var tcpClient;

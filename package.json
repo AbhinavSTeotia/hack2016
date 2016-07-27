@@ -23,11 +23,22 @@
       {
         "command": "extension.chat",
         "title": "chat window"
+      },
+      {
+        "command": "extension.connect",
+        "title": "connect"
       }
     ],
      "keybindings": [{
         "command": "extension.chat",
+        "key": "ctrl+f3"
+    },{
+      "command": "extension.sayHello",
         "key": "ctrl+f1"
+    },
+    {
+        "command": "extension.connect",
+        "key": "ctrl+f2"
     }]
   },
   "scripts": {
