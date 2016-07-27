@@ -27,18 +27,39 @@
       {
         "command": "extension.connect",
         "title": "connect"
+      },
+      {
+        "command": "extension.startPairProgramming",
+        "title": "Start PairProgramming"
+      },
+      {
+        "command": "extension.joinPairProgramming",
+        "title": "Join PairProgramming"
+      },
+      {
+        "command": "extension.sendFile",
+        "title": "Send File"
       }
     ],
-     "keybindings": [{
-        "command": "extension.chat",
-        "key": "ctrl+f3"
-    },{
+     "keybindings": [
+       {
       "command": "extension.sayHello",
         "key": "ctrl+f1"
     },
     {
-        "command": "extension.connect",
+        "command": "extension.startPairProgramming",
         "key": "ctrl+f2"
+    },
+    {
+        "command": "extension.joinPairProgramming",
+        "key": "ctrl+f3"
+    },
+    {
+        "command": "extension.chat",
+        "key": "ctrl+f4"
+    },{
+        "command": "extension.sendFile",
+        "key": "ctrl+f5"
     }]
   },
   "scripts": {

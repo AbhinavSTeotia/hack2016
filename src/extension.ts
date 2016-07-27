@@ -8,12 +8,15 @@ import * as dns from 'dns';
 
 export enum MessageType {
     ChatMessage,
-    TextEditing
+    TextEditing,
+    JoinPairProgramming,
+    fileContent
 }
 
 export class Message {
     type: MessageType;
     data: any;
+    fileName: string;
 } 
 
 export class MessageHelper {
@@ -30,6 +33,21 @@ export class MessageHelper {
         message.data = data;
         return message;
     }
+
+    public static getJoinPairProgrammingMessage(){
+        let message = new Message();
+        message.type = MessageType.JoinPairProgramming;
+        message.data = getExternalIp();
+        return message;
+    }
+
+    public static getSendFileMessage(fileName, fileContent){
+        let message = new Message();
+        message.type = MessageType.fileContent;
+        message.data = fileContent;
+        message.fileName = fileName;
+        return message;
+    }
 }
 
 // this method is called when your extension is activated
@@ -38,14 +56,9 @@ export function activate(context: vscode.ExtensionContext) {
     // Use the console to output diagnostic information (console.log) and errors (console.error)
     // This line of code will only be executed once when your extension is activated
     console.log('Congratulations, your extension "pairprogramming" is now active!');
-    
-    // Initialize TCP server.
-    tcpServer = initTcpServer();
-    // Initialize TCP client.
-    //tcpClient = initTcpClient();
-
+    registerStartPairProgrammingCommand();
+    registerJoinPairProgrammingCommand();
     registerChatCommand();
-    registerConnectCommand();
 
     // Add listner for text change event.
     vscode.workspace.onDidChangeTextDocument((textDocChanged: vscode.TextDocumentChangeEvent)=>{
@@ -74,47 +87,53 @@ export function deactivate() {
 function sendMessageToServer(obj){
     setTimeout(function(){
         if(!tcpClient){
-            dns.resolve(remoteHostName, (err, addresses)=>{
-                if(addresses && addresses[0]){
-                    tcpClient = net.createConnection({port: 6969, host: addresses[0]}, ()=>{
-                        tcpClient.write(JSON.stringify(obj));
-                    });
-                    tcpClient.on('data', (data)=>{
-                    });
-                    tcpClient.on('end', ()=>{
-                        tcpClient = null;
-                    });
-                    tcpClient.on('close', ()=>{
-                        tcpClient = null;
-                    });
-                }
-            });
+            if(remoteHostIP){
+                sendMessageToServerIP(obj);
+            }
+            else{
+                dns.resolve(remoteHostName, (err, addresses)=>{
+                    if(addresses && addresses[0]){
+                        remoteHostIP = addresses[0];
+                        sendMessageToServerIP(obj);
+                    }
+                });
+            }
         } else {
             tcpClient.write(JSON.stringify(obj));
-        }
-        // tcpClient = initTcpClient();
-        // tcpClient.connect(6969, remoteServerIP, ()=>{
-        //     tcpClient.write(JSON.stringify(obj));
-        // });  
+        } 
     }, 100); 
 }
 
-function initTcpServer(){
-    var externalIp = getExternalIp();
-    var server = net.createServer(function(sock) {
-        //sock.pipe(sock);
-        // Add a 'data' event handler to this instance of socket
-        sock.on('data', function(data) {
-            onServerMessageRecieved(data);
+function sendMessageToServerIP(obj){
+    tcpClient = net.createConnection({port: 6969, host: remoteHostIP}, ()=>{
+            tcpClient.write(JSON.stringify(obj));
         });
-        
-        // Add a 'close' event handler to this instance of socket
-        sock.on('close', function(data) {
+        tcpClient.on('data', (data)=>{
         });
-    }).listen(6969, externalIp);
-    return server;
+        tcpClient.on('end', ()=>{
+            tcpClient = null;
+        });
+        tcpClient.on('close', ()=>{
+            tcpClient = null;
+        });
 }
 
+function initTcpServer(){
+    if(!tcpServer){
+        var externalIp = getExternalIp();
+        tcpServer = net.createServer(function(sock) {
+            //sock.pipe(sock);
+            // Add a 'data' event handler to this instance of socket
+            sock.on('data', function(data) {
+                onServerMessageRecieved(data);
+            });
+            
+            // Add a 'close' event handler to this instance of socket
+            sock.on('close', function(data) {
+            });
+        }).listen(6969, externalIp);
+    }
+}
 function getExternalIp(): string{
     var address,
     ifaces = require('os').networkInterfaces();
@@ -127,14 +146,29 @@ function getExternalIp(): string{
 function onServerMessageRecieved(data){
     var stringConverted = String.fromCharCode.apply(null, data);
     var message = <Message>JSON.parse(stringConverted);
-
-    if(message.type === MessageType.ChatMessage) {
-        var msg = "Peer : " + message.data;
-        console.log(msg);
-        showMessageOnStatusBar(msg);
-    } else if(message.type === MessageType.TextEditing) {
-        handleTextEditing(message.data);
-    } 
+    switch (message.type) {
+        case MessageType.ChatMessage:
+            var msg = "Peer : " + message.data;
+            console.log(msg);
+            showMessageOnStatusBar(msg);    
+            break;
+        case MessageType.TextEditing:
+            handleTextEditing(message.data);    
+            break;
+        case MessageType.JoinPairProgramming:
+            var msg = "Started session with "+ message.data;
+            console.log(msg);
+            showMessageOnStatusBar(msg);
+            remoteHostIP = message.data;
+            tcpClient = null;
+            sendOpenFileToPeer();  
+            break;
+        case MessageType.fileContent:
+            openNewFile(message);
+            break;
+        default:
+            break;
+    }
 }
 
 function registerChatCommand(){
@@ -148,22 +182,59 @@ function registerChatCommand(){
     });
 }
 
-function registerConnectCommand(){
-    vscode.commands.registerCommand("extension.connect", ()=> {
-            vscode.window.showInputBox().then((str : string) => {
-                var msg = "Trying to connect to " + str;
+function registerStartPairProgrammingCommand(){
+    vscode.commands.registerCommand("extension.startPairProgramming", ()=> {
+        var msg = "Pair programming is active, waiting for peer to join.";
+        showMessageOnStatusBar(msg);
+        console.log(msg);
+        initTcpServer();
+        //     vscode.window.showInputBox().then((str : string) => {
+        //         var msg = "Pair programming is active, waiting for peer to join.";
+        //         showMessageOnStatusBar(msg);
+        //         console.log(msg);
+        //         remoteHostName = str;
+        // }); 
+    });
+}
+
+function registerJoinPairProgrammingCommand(){
+    vscode.commands.registerCommand("extension.joinPairProgramming", ()=> {
+        var msg = "Input host for pair programming session.";
+        showMessageOnStatusBar(msg);
+        console.log(msg);
+        vscode.window.showInputBox().then((str : string) => {
+            initTcpServer();
+                var msg = "Joining peer programming session to "+ str;
                 showMessageOnStatusBar(msg);
                 console.log(msg);
                 remoteHostName = str;
+                sendMessageToServer(MessageHelper.getJoinPairProgrammingMessage());
         }); 
     });
 }
 
+function openNewFile(message) {
+    var newFileUri = vscode.Uri.parse("untitled:"+message.fileName+".cs");
+    vscode.workspace.openTextDocument(newFileUri).then((doc)=>{
+        vscode.window.showTextDocument(doc).then((editor: vscode.TextEditor) => {
+            editor.edit((editBuilder: vscode.TextEditorEdit)=>{
+                var pos1 = new vscode.Position(0,0);
+                acquireLock();
+                editBuilder.insert(pos1, message.data);
+                setTimeout(function(){ releaseLock(); }, 100);
+                });
+        })
+    });
+}
+
 function handleTextEditing(data: any) {
-        var clientMessage = <vscode.TextDocumentChangeEvent>(data);
-        let filePath = data.document.uri.fsPath;
-        let results = filePath.split('\\');
-        vscode.workspace.findFiles(results[results.length-1], "").then((uris: vscode.Uri[])=> {
+    var clientMessage = <vscode.TextDocumentChangeEvent>(data);
+    let filePath = data.document.uri.fsPath;
+    let results = filePath.split('\\');
+    var tempFileName = "c:\\temp\\"+results[results.length-1];
+    var newFileUri = vscode.Uri.parse("untitled:"+tempFileName);        
+
+    vscode.workspace.findFiles(results[results.length-1], "").then((uris: vscode.Uri[])=> {
         vscode.workspace.openTextDocument(uris[0]).then(
             (doc) => {
                 vscode.window.showTextDocument(doc).then((editor: vscode.TextEditor) => {                   
@@ -178,6 +249,12 @@ function handleTextEditing(data: any) {
             });                                 
         });
     });
+}
+
+function sendOpenFileToPeer(){
+    var fileName = vscode.window.activeTextEditor.document.fileName;
+    var fileContent = vscode.window.activeTextEditor.document.getText();
+    sendMessageToServer(MessageHelper.getSendFileMessage(fileName, fileContent));
 }
 
 function showMessageOnStatusBar(str){
@@ -195,6 +272,7 @@ function releaseLock(){
 }
 
 export var remoteHostName = "abhinasi-dev.fareast.corp.microsoft.com";
+export var remoteHostIP;
 export var lock = false;
 export var tcpServer;
 export var tcpClient;
