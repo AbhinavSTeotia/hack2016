@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import * as net from 'net';
 import * as os from 'os';
 import * as dns from 'dns';
+import * as request from 'request';
 
 export enum MessageType {
     ChatMessage,
@@ -59,7 +60,7 @@ export function activate(context: vscode.ExtensionContext) {
     registerStartPairProgrammingCommand();
     registerJoinPairProgrammingCommand();
     registerChatCommand();
-
+    registerCodeSearchCommand();
     // Add listner for text change event.
     vscode.workspace.onDidChangeTextDocument((textDocChanged: vscode.TextDocumentChangeEvent)=>{
         if(!lock){
@@ -213,6 +214,14 @@ function registerJoinPairProgrammingCommand(){
     });
 }
 
+function registerCodeSearchCommand(){
+    vscode.commands.registerCommand("extension.codeSearch", ()=> {
+            vscode.window.showInputBox().then((str : string) => {
+               stackOverflowCodeSnippet(str);
+        }); 
+    });
+} 
+
 function openNewFile(message) {
     var newFileUri = vscode.Uri.parse("untitled:"+message.fileName+".cs");
     vscode.workspace.openTextDocument(newFileUri).then((doc)=>{
@@ -269,6 +278,33 @@ function acquireLock(){
 
 function releaseLock(){
     lock = false;
+}
+
+export function stackOverflowCodeSnippet(str: string) {
+    let codeMessage = `static void a() {
+    ///${str} 
+    }`;
+    let len = str.length + 3;
+
+    request.post({url: 'http://codesnippet.research.microsoft.com/api/CodeSnippet/GetSnippetsFromWeb', form: {
+    code: codeMessage, 
+    cursorX: '' + len,
+    cursorY: '1',
+    limitDomains: true
+    }}, function(err, httpResponse, body) {
+    let response = JSON.parse(body);
+    console.log(response.items[0].code);
+    var filePath = "untitled:c:\\temp\\codeSearchResult.txt";
+    
+    vscode.workspace.openTextDocument(vscode.Uri.parse(filePath)).then(
+            (doc) => {
+                vscode.window.showTextDocument(doc,2).then((editor: vscode.TextEditor) => {                   
+                editor.edit((editBuilder: vscode.TextEditorEdit)=>{
+                    editBuilder.insert(new vscode.Position(0,0), response.items[0].code);
+                });
+            });
+        });
+    });
 }
 
 export var remoteHostName = "abhinasi-dev.fareast.corp.microsoft.com";
