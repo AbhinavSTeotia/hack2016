@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as net from 'net';
 import * as os from 'os';
 import * as dns from 'dns';
-import * as request from 'request';
+import request = require('request');
 
 export enum MessageType {
     ChatMessage,
@@ -286,7 +286,7 @@ export function stackOverflowCodeSnippet(str: string) {
     }`;
     let len = str.length + 3;
 
-    request.post({url: 'http://codesnippet.research.microsoft.com/api/CodeSnippet/GetSnippetsFromWeb', form: {
+    (request).post({url: 'http://codesnippet.research.microsoft.com/api/CodeSnippet/GetSnippetsFromWeb', form: {
     code: codeMessage, 
     cursorX: '' + len,
     cursorY: '1',
