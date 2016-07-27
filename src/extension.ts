@@ -133,15 +133,7 @@ function onServerMessageRecieved(data){
         console.log(msg);
         showMessageOnStatusBar(msg);
     } else if(message.type === MessageType.TextEditing) {
-            var clientMessage = <vscode.TextDocumentChangeEvent>(message.data);
-            vscode.window.activeTextEditor.edit((editBuilder: vscode.TextEditorEdit)=>{
-            var pos1 = new vscode.Position(clientMessage.contentChanges[0].range[1].line, clientMessage.contentChanges[0].range[1].character);
-            var pos2 = new vscode.Position(clientMessage.contentChanges[0].range[0].line, clientMessage.contentChanges[0].range[0].character);
-            var newRange = new vscode.Range(pos1, pos2);
-            acquireLock();
-            editBuilder.replace(newRange, clientMessage.contentChanges[0].text);
-            setTimeout(function(){ releaseLock(); }, 100);
-        });
+        handleTextEditing(message.data);
     } 
 }
 
@@ -164,6 +156,27 @@ function registerConnectCommand(){
                 console.log(msg);
                 remoteHostName = str;
         }); 
+    });
+}
+
+function handleTextEditing(data: any) {
+        var clientMessage = <vscode.TextDocumentChangeEvent>(data);
+        let filePath = data.document.uri.fsPath;
+        let results = filePath.split('\\');
+        vscode.workspace.findFiles(results[results.length-1], "").then((uris: vscode.Uri[])=> {
+        vscode.workspace.openTextDocument(uris[0]).then(
+            (doc) => {
+                vscode.window.showTextDocument(doc).then((editor: vscode.TextEditor) => {                   
+                editor.edit((editBuilder: vscode.TextEditorEdit)=>{
+                var pos1 = new vscode.Position(clientMessage.contentChanges[0].range[1].line, clientMessage.contentChanges[0].range[1].character);
+                var pos2 = new vscode.Position(clientMessage.contentChanges[0].range[0].line, clientMessage.contentChanges[0].range[0].character);
+                var newRange = new vscode.Range(pos1, pos2);
+                acquireLock();
+                editBuilder.replace(newRange, clientMessage.contentChanges[0].text);
+                setTimeout(function(){ releaseLock(); }, 100);
+                });
+            });                                 
+        });
     });
 }
 
